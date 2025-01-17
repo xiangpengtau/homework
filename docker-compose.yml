@@ -1,0 +1,58 @@
+version: '3.8'  # Specify version number
+
+services:
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: dbname
+    volumes:
+      - ./app/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data  # Add persistent storage
+    ports:
+      - "5432:5432"
+    healthcheck:
+      # Modified health check with correct database name
+      test: ["CMD-SHELL", "pg_isready -U user -d dbname"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  redis:
+    image: redis:6.2
+    hostname: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=dbname
+      - DB_USER=user
+      - DB_PASSWORD=password
+      - REDIS_HOST=redis  # Add Redis configuration
+      - REDIS_PORT=6379
+    depends_on:
+      db:
+        condition: service_healthy  # Wait for database to be ready
+      redis:
+        condition: service_started
+    networks:
+      - app-network
+    restart: on-failure  # Add restart policy
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
